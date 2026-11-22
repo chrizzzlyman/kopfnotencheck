@@ -1,11 +1,14 @@
-// Die 13 Schwerpunkte aus den Bewertungsmatrizen "Mitarbeit" und "Verhalten" (Stand 05.08.2025).
+// Die 13 Schwerpunkte aus den Bewertungsmatrizen "Mitarbeit" und "Verhalten" (Stand 05.08.2025)
+// plus ein Zusatzzähler für vergessene Hausaufgaben (kein Teil der Matrizen, fließt nicht in "Gesamt" ein).
 // label  = kurzer Name für Buttons und Tabellen
 // full   = Bezeichnung wie in der Bewertungsmatrix
 // pos/neg = kurze Alltagshinweise, was ein + bzw. − bedeutet (abgeleitet aus der Matrix)
+// extra  = Zusatzzähler außerhalb der Matrizen; single = nur ein Zähler (ein Tipp = eine Zählung, gespeichert als −1)
 
 export const CATEGORIES = [
   { key: 'mitarbeit', label: 'Mitarbeit' },
   { key: 'verhalten', label: 'Verhalten' },
+  { key: 'hausaufgabe', label: 'Hausaufgaben', extra: true },
 ];
 
 export const ASPECTS = [
@@ -89,8 +92,23 @@ export const ASPECTS = [
     pos: 'hält Absprachen ein',
     neg: 'missachtet Absprachen',
   },
+  // ---- Zusatzzähler ----
+  {
+    key: 'hausaufgabe', cat: 'hausaufgabe', extra: true, single: true,
+    label: 'Vergessen', full: 'Hausaufgabe vergessen',
+    neg: 'Jeder Tipp zählt eine vergessene Hausaufgabe',
+  },
 ];
 
 export const ASPECT_BY_KEY = Object.fromEntries(ASPECTS.map((a) => [a.key, a]));
 export const aspectsOf = (cat) => ASPECTS.filter((a) => a.cat === cat);
-export const DEFAULT_FOCUS = { mitarbeit: 'beteiligung', verhalten: 'regeln' };
+/** Nur die Schwerpunkte der Bewertungsmatrizen (Grundlage für "Gesamt"). */
+export const MATRIX_ASPECTS = ASPECTS.filter((a) => !a.extra);
+export const MATRIX_CATEGORIES = CATEGORIES.filter((c) => !c.extra);
+export const EXTRA_ASPECT = ASPECTS.find((a) => a.extra);
+/** Name für Verlauf, Meldungen und PDF-Listen (bei Zusatzzählern die ausführliche Bezeichnung). */
+export const aspectTitle = (key) => {
+  const a = ASPECT_BY_KEY[key];
+  return a ? (a.extra ? a.full : a.label) : key;
+};
+export const DEFAULT_FOCUS = { mitarbeit: 'beteiligung', verhalten: 'regeln', hausaufgabe: 'hausaufgabe' };

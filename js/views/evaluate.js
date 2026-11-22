@@ -1,7 +1,7 @@
 // Auswertung: Tabelle aller Kinder × Schwerpunkte mit Zählern und Tendenz (ohne Notenvorschlag).
 
 import { h, clear, plural } from '../util.js';
-import { CATEGORIES, ASPECTS, aspectsOf } from '../aspects.js';
+import { MATRIX_CATEGORIES, MATRIX_ASPECTS, EXTRA_ASPECT, CATEGORIES, aspectsOf } from '../aspects.js';
 import { S, ALL, getCount, sumCounts } from '../state.js';
 import { icon } from '../ui.js';
 import { openChildSheet } from './child.js';
@@ -43,17 +43,27 @@ export function renderEvaluate(app) {
     return td;
   }
 
+  /** Zusatzzähler (Hausaufgaben): nur eine Zahl, kein Balken. */
+  function extraCell(studentId, a) {
+    const [, m] = getCount(studentId, a.key, periodId);
+    const td = h('td', { class: `cell extra${m ? '' : ' zero'}` });
+    if (m) td.append(h('span', { class: 'nums', 'aria-label': `${m} Mal ${a.full}` }, num(m, 'm')));
+    return td;
+  }
+
   function renderTable() {
     const rows = S.students.map((s) => ({ s, tot: sumCounts(s.id, periodId) }));
     if (sort === 'least') rows.sort((a, b) => a.tot[0] + a.tot[1] - (b.tot[0] + b.tot[1]));
 
     const head1 = h('tr', { class: 'group-row' },
       h('th', { class: 'name-col corner', rowspan: 2, scope: 'col' }, 'Kind'),
-      ...CATEGORIES.map((c) => h('th', { class: `group ${c.key}`, colspan: aspectsOf(c.key).length, scope: 'colgroup' }, c.label)),
+      ...MATRIX_CATEGORIES.map((c) => h('th', { class: `group ${c.key}`, colspan: aspectsOf(c.key).length, scope: 'colgroup' }, c.label)),
       h('th', { class: 'total-col', rowspan: 2, scope: 'col' }, 'Gesamt'),
+      ...CATEGORIES.filter((c) => c.extra).map((c) => h('th', { class: `group ${c.key} extra-col`, colspan: aspectsOf(c.key).length, scope: 'colgroup' }, c.label)),
     );
     const head2 = h('tr', { class: 'aspect-row-head' },
-      ...ASPECTS.map((a) => h('th', { class: `rot ${a.cat}`, scope: 'col', title: a.full }, h('span', {}, a.label))),
+      ...MATRIX_ASPECTS.map((a) => h('th', { class: `rot ${a.cat}`, scope: 'col', title: a.full }, h('span', {}, a.label))),
+      h('th', { class: `rot ${EXTRA_ASPECT.cat} extra-col`, scope: 'col', title: EXTRA_ASPECT.full }, h('span', {}, EXTRA_ASPECT.label)),
     );
 
     const body = h('tbody');
@@ -62,8 +72,9 @@ export function renderEvaluate(app) {
       body.append(
         h('tr', { class: none ? 'unobserved' : '' },
           h('th', { class: 'name-col', scope: 'row' }, h('button', { class: 'name-link', type: 'button', onclick: () => openChildSheet(s.id, { periodId, onChange: renderTable }) }, s.name)),
-          ASPECTS.map((a) => cell(s.id, a.key)),
+          MATRIX_ASPECTS.map((a) => cell(s.id, a.key)),
           h('td', { class: 'total-col' }, none ? h('span', { class: 'none' }, 'keine') : h('span', { class: 'nums', 'aria-label': `${tot[0]} positiv, ${tot[1]} negativ` }, num(tot[0], 'p'), num(tot[1], 'm'))),
+          extraCell(s.id, EXTRA_ASPECT),
         ),
       );
     }
@@ -89,7 +100,7 @@ export function renderEvaluate(app) {
       summary,
       wrap,
       h('p', { class: 'hint legend' },
-        h('span', { class: 'sgn plus' }, 'Grün'), ' zählt positive, ', h('span', { class: 'sgn minus' }, 'Rot'), ' negative Beobachtungen. Der Balken zeigt den Anteil der positiven. Die Zahlen dokumentieren Beobachtungen und ersetzen nicht die Bewertung nach den Bewertungsmatrizen.'),
+        h('span', { class: 'sgn plus' }, 'Grün'), ' zählt positive, ', h('span', { class: 'sgn minus' }, 'Rot'), ' negative Beobachtungen. Der Balken zeigt den Anteil der positiven. Die Spalte Hausaufgaben zählt vergessene Hausaufgaben und fließt nicht in „Gesamt“ ein. Die Zahlen dokumentieren Beobachtungen und ersetzen nicht die Bewertung nach den Bewertungsmatrizen.'),
     ),
   );
   renderControls();

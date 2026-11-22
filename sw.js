@@ -2,7 +2,7 @@
 // Strategie: erst Netzwerk (damit Updates sofort ankommen), bei Funkloch oder Timeout der gespeicherte Stand.
 // Beim Hinzufügen neuer Dateien zur App bitte auch ASSETS ergänzen und CACHE hochzählen.
 
-const CACHE = 'kopfnoten-v1';
+const CACHE = 'kopfnoten-v2';
 const TIMEOUT_MS = 3000;
 const ASSETS = [
   './',

@@ -1,4 +1,5 @@
 // Unterrichtsansicht: Fokus-Modus. Oben der Schwerpunkt, bei jedem Kind ein + und ein −.
+// Im Bereich "Hausaufgaben" gibt es nur einen Button pro Kind (vergessen), ein Tipp zählt einmal.
 
 import { h, clear } from '../util.js';
 import { CATEGORIES, ASPECT_BY_KEY, aspectsOf } from '../aspects.js';
@@ -12,7 +13,7 @@ import { openExportSheet } from './exporter.js';
 
 export function renderLive(app) {
   const cls = S.cls;
-  const cards = new Map(); // studentId -> { el, plus, minus, sr, btnPlus, btnMinus, name }
+  const cards = new Map(); // studentId -> { el, plus, minus, sr, btnPlus, btnMinus, minusText, name }
 
   // ------------------------------------------------------------ Kopf
   const pill = h('button', { class: 'period-pill', type: 'button', onclick: () => openPeriodPicker({ onChange: refreshAll }) });
@@ -28,7 +29,8 @@ export function renderLive(app) {
   const chips = h('div', { class: 'focus-chips', role: 'group', 'aria-label': 'Schwerpunkt' });
   const hintPlus = h('p', { class: 'hint-box plus' });
   const hintMinus = h('p', { class: 'hint-box minus' });
-  const panel = h('section', { class: 'focus', 'aria-label': 'Aktueller Schwerpunkt' }, tabs, chips, h('div', { class: 'hints' }, hintPlus, hintMinus));
+  const hints = h('div', { class: 'hints' }, hintPlus, hintMinus);
+  const panel = h('section', { class: 'focus', 'aria-label': 'Aktueller Schwerpunkt' }, tabs, chips, hints);
 
   function updateFocus() {
     const focus = ASPECT_BY_KEY[S.ui.focus];
@@ -43,8 +45,10 @@ export function renderLive(app) {
         }, c.label)),
     );
     const sl = chips.scrollLeft;
+    const list = aspectsOf(focus.cat);
+    chips.hidden = list.length < 2; // ein einziger Schwerpunkt braucht keine Auswahl
     chips.replaceChildren(
-      ...aspectsOf(focus.cat).map((a) =>
+      ...list.map((a) =>
         h('button', {
           class: 'chip',
           type: 'button',
@@ -55,8 +59,11 @@ export function renderLive(app) {
     chips.scrollLeft = sl;
     const sel = chips.querySelector('[aria-pressed="true"]');
     if (sel && chips.scrollWidth > chips.clientWidth) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    hintPlus.replaceChildren(h('span', { class: 'sgn' }, '+'), h('span', {}, focus.pos));
+    hintPlus.hidden = !!focus.single;
+    hintPlus.replaceChildren(h('span', { class: 'sgn' }, '+'), h('span', {}, focus.pos || ''));
     hintMinus.replaceChildren(h('span', { class: 'sgn' }, '−'), h('span', {}, focus.neg));
+    hints.classList.toggle('single', !!focus.single);
+    grid.classList.toggle('single', !!focus.single);
   }
 
   function chooseFocus(key) {
@@ -77,14 +84,15 @@ export function renderLive(app) {
       const minus = h('span', { class: 'tally-slot minus' });
       const sr = h('span', { class: 'sr-only' });
       const btnPlus = h('button', { class: 'act plus', type: 'button', 'data-v': '1' }, h('span', { 'aria-hidden': 'true' }, '+'));
-      const btnMinus = h('button', { class: 'act minus', type: 'button', 'data-v': '-1' }, h('span', { 'aria-hidden': 'true' }, '−'));
+      const minusText = h('span', { 'aria-hidden': 'true' }, '−');
+      const btnMinus = h('button', { class: 'act minus', type: 'button', 'data-v': '-1' }, minusText);
       const name = h('button', { class: 'kid-name', type: 'button', 'data-open': '1' }, s.name);
       const el = h('article', { class: 'kid', dataset: { id: s.id } },
         name,
         h('div', { class: 'kid-tallies' }, plus, minus, sr),
         h('div', { class: 'kid-actions' }, btnPlus, btnMinus),
       );
-      cards.set(s.id, { el, plus, minus, sr, btnPlus, btnMinus, name });
+      cards.set(s.id, { el, plus, minus, sr, btnPlus, btnMinus, minusText, name });
       grid.append(el);
     }
   }
@@ -97,9 +105,15 @@ export function renderLive(app) {
     const [p, m] = S.ui.periodId ? getCount(studentId, focus.key, S.ui.periodId) : [0, 0];
     c.plus.replaceChildren(tally(p, 'plus', { fresh: fresh > 0 }));
     c.minus.replaceChildren(tally(m, 'minus', { fresh: fresh < 0 }));
-    c.sr.textContent = `${focus.label}: ${p} positiv, ${m} negativ`;
-    c.btnPlus.setAttribute('aria-label', `${s.name}: ${focus.label} positiv`);
-    c.btnMinus.setAttribute('aria-label', `${s.name}: ${focus.label} negativ`);
+    if (focus.single) {
+      c.sr.textContent = `${focus.full}: ${m}`;
+      c.btnMinus.setAttribute('aria-label', `${s.name}: ${focus.full}`);
+    } else {
+      c.sr.textContent = `${focus.label}: ${p} positiv, ${m} negativ`;
+      c.btnPlus.setAttribute('aria-label', `${s.name}: ${focus.label} positiv`);
+      c.btnMinus.setAttribute('aria-label', `${s.name}: ${focus.label} negativ`);
+    }
+    c.minusText.textContent = focus.single ? 'Vergessen' : '−';
     c.name.setAttribute('aria-label', `${s.name}: alle Schwerpunkte öffnen`);
   }
 
@@ -156,7 +170,10 @@ export function renderLive(app) {
       setTimeout(() => (v > 0 ? c.btnPlus : c.btnMinus).classList.remove('hit'), 160);
     }
     if (navigator.vibrate) navigator.vibrate(10);
-    toast(h('span', {}, h('strong', {}, s.name), `: ${focus.label} `, h('span', { class: `sgn ${v > 0 ? 'plus' : 'minus'}` }, v > 0 ? '+' : '−')), {
+    const what = focus.single
+      ? [`: ${focus.full}`]
+      : [`: ${focus.label} `, h('span', { class: `sgn ${v > 0 ? 'plus' : 'minus'}` }, v > 0 ? '+' : '−')];
+    toast(h('span', {}, h('strong', {}, s.name), ...what), {
       action: 'Rückgängig',
       onAction: () => {
         const saved = removeObservation(res.obs.id); // Zustand ändert sich sofort, Speichern läuft nach

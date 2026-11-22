@@ -1,7 +1,7 @@
 // Detailansicht eines Kindes: alle Schwerpunkte mit + und −, Zähler und Verlauf der Beobachtungen.
 
 import { h, deShortDateTime, plural } from '../util.js';
-import { CATEGORIES, ASPECT_BY_KEY, aspectsOf } from '../aspects.js';
+import { CATEGORIES, ASPECT_BY_KEY, aspectsOf, aspectTitle } from '../aspects.js';
 import {
   S, ALL, getStudent, getCount, sumCounts, observationsOf, addObservation, removeObservation,
   restoreObservation, setObservationNote, getPeriod,
@@ -57,7 +57,7 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
     render();
     onChange();
     const a = ASPECT_BY_KEY[aspectKey];
-    toast(h('span', {}, `${a.label} `, h('span', { class: `sgn ${v > 0 ? 'plus' : 'minus'}` }, v > 0 ? '+' : '−')), {
+    toast(a.single ? h('span', {}, a.full) : h('span', {}, `${a.label} `, h('span', { class: `sgn ${v > 0 ? 'plus' : 'minus'}` }, v > 0 ? '+' : '−')), {
       action: 'Rückgängig',
       onAction: () => {
         const saved = removeObservation(res.obs.id);
@@ -83,6 +83,18 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
   function aspectRow(a) {
     const [p, m] = getCount(studentId, a.key, viewPeriod);
     const canAdd = viewPeriod !== ALL;
+    if (a.single) {
+      // Zusatzzähler (Hausaufgaben): nur eine Zählung, kein + und −
+      return h('div', { class: 'aspect-row' },
+        h('div', { class: 'aspect-main' },
+          h('span', { class: 'aspect-name' }, a.full),
+          m ? h('span', { class: 'aspect-counts', 'aria-label': `${m} Mal` }, h('span', { class: 'cnt minus' }, `${m}×`)) : null),
+        canAdd
+          ? h('div', { class: 'mini-actions' },
+              h('button', { class: 'mini minus wide', type: 'button', 'aria-label': `${a.full}: einmal zählen`, onclick: () => record(a.key, -1) }, 'Vergessen'))
+          : null,
+      );
+    }
     return h('div', { class: 'aspect-row' },
       h('div', { class: 'aspect-main' }, h('span', { class: 'aspect-name' }, a.label), counts(p, m)),
       canAdd
@@ -105,7 +117,7 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
         h('section', { class: `aspect-group ${cat.key}` },
           h('div', { class: 'group-head' },
             h('h3', {}, cat.label),
-            counts(p, m, 'group-total')),
+            cat.extra ? null : counts(p, m, 'group-total')),
           list.map(aspectRow)),
       );
     }
@@ -117,12 +129,11 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
     if (!all.length) hist.append(h('p', { class: 'hint' }, 'Noch keine Beobachtungen in diesem Zeitraum.'));
     const ul = h('ul', { class: 'history-list' });
     for (const o of shown) {
-      const a = ASPECT_BY_KEY[o.aspect];
       ul.append(
         h('li', { class: 'history-item' },
           h('span', { class: `sgn-badge ${o.v > 0 ? 'plus' : 'minus'}`, 'aria-label': o.v > 0 ? 'positiv' : 'negativ' }, o.v > 0 ? '+' : '−'),
           h('div', { class: 'history-main' },
-            h('span', { class: 'history-title' }, a ? a.label : o.aspect),
+            h('span', { class: 'history-title' }, aspectTitle(o.aspect)),
             h('span', { class: 'history-meta' }, deShortDateTime(o.ts), viewPeriod === ALL && getPeriod(o.periodId) ? `, ${getPeriod(o.periodId).name}` : ''),
             o.note ? h('span', { class: 'history-note' }, o.note) : null),
           h('div', { class: 'history-actions' },
@@ -156,8 +167,7 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
   }
 
   function editNote(o) {
-    const a = ASPECT_BY_KEY[o.aspect];
-    const nsh = openSheet({ title: 'Notiz zur Beobachtung', subtitle: `${a ? a.label : ''}, ${deShortDateTime(o.ts)}`, size: 'small' });
+    const nsh = openSheet({ title: 'Notiz zur Beobachtung', subtitle: `${aspectTitle(o.aspect)}, ${deShortDateTime(o.ts)}`, size: 'small' });
     const ta = h('textarea', { rows: 4, maxLength: 500, placeholder: 'z. B. Was genau ist passiert?', value: o.note || '' });
     const err = h('div');
     nsh.body.append(h('div', { class: 'field' }, h('label', { for: 'note-input' }, 'Notiz'), ta), err);

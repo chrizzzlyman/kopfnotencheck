@@ -2,7 +2,7 @@
 // Jede Änderung wird sofort in IndexedDB gespeichert.
 
 import * as db from './db.js';
-import { ASPECTS, DEFAULT_FOCUS, ASPECT_BY_KEY } from './aspects.js';
+import { MATRIX_ASPECTS, DEFAULT_FOCUS, ASPECT_BY_KEY } from './aspects.js';
 import { uid, todayIso, collator } from './util.js';
 
 export const ALL = 'all'; // Pseudo-Zeitraum "Alle Zeiträume" (nur für Ansicht und Export)
@@ -155,8 +155,8 @@ export function getCount(studentId, aspect, periodId) {
   return S.counts.get(key(studentId, aspect, periodId)) || [0, 0];
 }
 
-/** Summe über mehrere Schwerpunkte. */
-export function sumCounts(studentId, periodId, aspects = ASPECTS) {
+/** Summe über mehrere Schwerpunkte (Standard: nur die Matrix-Schwerpunkte, ohne Hausaufgaben). */
+export function sumCounts(studentId, periodId, aspects = MATRIX_ASPECTS) {
   let p = 0;
   let m = 0;
   for (const a of aspects) {

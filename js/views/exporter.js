@@ -20,7 +20,7 @@ export function openExportSheet({ periodId = null } = {}) {
   const err = h('div');
 
   const kinds = [
-    { key: 'overview', title: 'Klassenübersicht', sub: 'Eine Tabelle: alle Kinder und alle Schwerpunkte mit Zählern (Querformat).' },
+    { key: 'overview', title: 'Klassenübersicht', sub: 'Eine Tabelle: alle Kinder, alle Schwerpunkte und vergessene Hausaufgaben (Querformat).' },
     { key: 'child', title: 'Bericht für ein Kind', sub: 'Zähler je Schwerpunkt und Verlauf, zum Beispiel für ein Elterngespräch.' },
     { key: 'all', title: 'Berichte für alle Kinder', sub: `Ein Bericht je Kind, ${plural(S.students.length, 'Kind', 'Kinder')} in einer Datei.` },
   ];

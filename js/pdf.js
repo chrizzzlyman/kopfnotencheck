@@ -2,7 +2,7 @@
 // Schrift: Liberation Sans (SIL OFL), damit auch Namen mit ş, ğ, ł, ć, č, ő oder kyrillischen Buchstaben stimmen.
 
 import { S, ALL, getCount, sumCounts, getPeriod, periodRangeText, observationsOf, getStudent } from './state.js';
-import { ASPECTS, ASPECT_BY_KEY, CATEGORIES, aspectsOf } from './aspects.js';
+import { MATRIX_ASPECTS, MATRIX_CATEGORIES, CATEGORIES, EXTRA_ASPECT, aspectsOf, aspectTitle } from './aspects.js';
 import { deDate, deDateTime, safeFilename, todayIso } from './util.js';
 
 const C = {
@@ -18,6 +18,8 @@ const C = {
   mitarbeitTint: [225, 234, 250],
   verhalten: [160, 94, 0],
   verhaltenTint: [250, 235, 204],
+  hausaufgabe: [122, 63, 160],
+  hausaufgabeTint: [239, 227, 247],
 };
 
 const MINUS = '−';
@@ -81,8 +83,8 @@ function setFont(doc, style = 'normal', size = 10, color = C.ink) {
   doc.setTextColor(...color);
 }
 
-const catColor = (cat) => (cat === 'mitarbeit' ? C.mitarbeit : C.verhalten);
-const catTint = (cat) => (cat === 'mitarbeit' ? C.mitarbeitTint : C.verhaltenTint);
+const catColor = (cat) => C[cat] || C.ink;
+const catTint = (cat) => C[`${cat}Tint`] || C.soft;
 
 function cellBox(doc, x, y, w, h, fill = null) {
   doc.setDrawColor(...C.line);
@@ -124,9 +126,10 @@ function titleBlock(doc, ctx, title, y) {
 
 function drawOverview(doc, ctx) {
   const { m, W, H } = ctx;
-  const nameW = 46;
-  const totalW = 24;
-  const aspW = (W - 2 * m - nameW - totalW) / ASPECTS.length;
+  const nameW = 42;
+  const totalW = 22;
+  const extraW = 22; // Spalte Hausaufgaben (nach Gesamt)
+  const aspW = (W - 2 * m - nameW - totalW - extraW) / MATRIX_ASPECTS.length;
   const groupH = 7;
   const headH = 31;
   const rowH = 6.4;
@@ -139,7 +142,7 @@ function drawOverview(doc, ctx) {
     doc.text('Kind', m + 2, y0 + groupH + headH - 2.5);
     // Gruppen
     let x = m + nameW;
-    for (const cat of CATEGORIES) {
+    for (const cat of MATRIX_CATEGORIES) {
       const n = aspectsOf(cat.key).length;
       cellBox(doc, x, y0, n * aspW, groupH, catTint(cat.key));
       setFont(doc, 'bold', 9.5, catColor(cat.key));
@@ -148,20 +151,34 @@ function drawOverview(doc, ctx) {
     }
     // Schwerpunkte (um 90 Grad gedreht)
     x = m + nameW;
-    for (const a of ASPECTS) {
+    for (const a of MATRIX_ASPECTS) {
       cellBox(doc, x, y0 + groupH, aspW, headH, C.soft);
       setFont(doc, 'normal', 8.5);
       doc.text(clean(a.label), x + aspW / 2 + 1.2, y0 + groupH + headH - 2, { angle: 90 });
       x += aspW;
     }
-    // Gesamt
+    // Gesamt (nur Matrix-Schwerpunkte)
     cellBox(doc, x, y0, totalW, groupH + headH, C.soft);
     setFont(doc, 'bold', 9.5);
     doc.text('Gesamt', x + totalW / 2, y0 + groupH + headH - 2.5, { align: 'center' });
+    x += totalW;
+    // Hausaufgaben (Zusatzzähler)
+    const ex = EXTRA_ASPECT;
+    cellBox(doc, x, y0, extraW, groupH, catTint(ex.cat));
+    let gs = 9;
+    setFont(doc, 'bold', gs, catColor(ex.cat));
+    while (gs > 6.5 && doc.getTextWidth('Hausaufgaben') > extraW - 2) {
+      gs -= 0.5;
+      setFont(doc, 'bold', gs, catColor(ex.cat));
+    }
+    doc.text('Hausaufgaben', x + extraW / 2, y0 + 4.8, { align: 'center' });
+    cellBox(doc, x, y0 + groupH, extraW, headH, C.soft);
+    setFont(doc, 'normal', 8.5);
+    doc.text(clean(ex.label), x + extraW / 2 + 1.2, y0 + groupH + headH - 2, { angle: 90 });
     return y0 + groupH + headH;
   };
 
-  let y = titleBlock(doc, ctx, 'Beobachtungen Mitarbeit und Verhalten', m);
+  let y = titleBlock(doc, ctx, 'Beobachtungen Mitarbeit, Verhalten und Hausaufgaben', m);
   y = drawHead(y);
 
   S.students.forEach((s, i) => {
@@ -174,7 +191,7 @@ function drawOverview(doc, ctx) {
     setFont(doc, 'normal', 9.5);
     doc.text(fitText(doc, s.name, nameW - 4), m + 2, y + rowH / 2 + 1.2);
     let x = m + nameW;
-    for (const a of ASPECTS) {
+    for (const a of MATRIX_ASPECTS) {
       cellBox(doc, x, y, aspW, rowH, fill);
       const [p, mi] = getCount(s.id, a.key, ctx.periodId);
       // + steht immer links, − rechts; eine Null bleibt leer, damit die Tabelle ruhig wirkt
@@ -203,6 +220,14 @@ function drawOverview(doc, ctx) {
       setFont(doc, 'normal', 8.5, C.muted);
       doc.text('keine', x + totalW / 2, y + rowH / 2 + 1.2, { align: 'center' });
     }
+    x += totalW;
+    // Hausaufgaben: nur die Anzahl, eine Null bleibt leer
+    cellBox(doc, x, y, extraW, rowH, fill);
+    const forgotten = getCount(s.id, EXTRA_ASPECT.key, ctx.periodId)[1];
+    if (forgotten > 0) {
+      setFont(doc, 'bold', 9.5, catColor(EXTRA_ASPECT.cat));
+      doc.text(String(forgotten), x + extraW / 2, y + rowH / 2 + 1.2, { align: 'center' });
+    }
     y += rowH;
   });
 
@@ -212,7 +237,7 @@ function drawOverview(doc, ctx) {
     y = m;
   }
   setFont(doc, 'normal', 8.5, C.muted);
-  doc.text(`Grün: positive Beobachtungen. Rot: negative Beobachtungen. Leere Felder: keine Beobachtung. Insgesamt ${S.obs.filter((o) => ctx.periodId === ALL || o.periodId === ctx.periodId).length} Beobachtungen im gewählten Zeitraum.`, m, y);
+  doc.text(`Grün: positive Beobachtungen. Rot: negative Beobachtungen. Leere Felder: keine Beobachtung. Hausaufgaben: Anzahl vergessener Hausaufgaben, nicht in Gesamt enthalten. Insgesamt ${S.obs.filter((o) => ctx.periodId === ALL || o.periodId === ctx.periodId).length} Beobachtungen im gewählten Zeitraum.`, m, y);
 }
 
 // ------------------------------------------------------------------ Bericht pro Kind (Hochformat)
@@ -230,6 +255,26 @@ function drawChild(doc, ctx, student, includeList, isFirst) {
 
   for (const cat of CATEGORIES) {
     const list = aspectsOf(cat.key);
+    if (cat.extra) {
+      // Zusatzzähler (Hausaufgaben): eine Zeile mit Anzahl, ohne positiv/negativ
+      const a = list[0];
+      const count = getCount(student.id, a.key, ctx.periodId)[1];
+      cellBox(doc, m, y, cw, 7, catTint(cat.key));
+      setFont(doc, 'bold', 10, catColor(cat.key));
+      doc.text(cat.label, m + 2, y + 4.9);
+      y += 7;
+      cellBox(doc, m, y, nameW, 7);
+      cellBox(doc, m + nameW, y, numW, 7);
+      cellBox(doc, m + nameW + numW, y, cw - nameW - numW, 7);
+      setFont(doc, 'normal', 9.5);
+      doc.text(clean(a.full), m + 2, y + 4.9);
+      setFont(doc, 'bold', 10, count ? catColor(cat.key) : C.line);
+      doc.text(String(count), m + nameW + numW / 2, y + 4.9, { align: 'center' });
+      setFont(doc, 'normal', 8.5, C.muted);
+      doc.text(count ? 'Mal im Zeitraum (nicht in Summen)' : 'nicht vorgekommen', m + nameW + numW + 3, y + 4.8);
+      y += 12;
+      continue;
+    }
     // Kopfzeile
     cellBox(doc, m, y, cw, 7, catTint(cat.key));
     setFont(doc, 'bold', 10, catColor(cat.key));
@@ -317,10 +362,9 @@ function drawChild(doc, ctx, student, includeList, isFirst) {
   }
   y = listHead(y);
   for (const o of obs) {
-    const a = ASPECT_BY_KEY[o.aspect];
     const when = deDateTime(o.ts);
     setFont(doc, 'normal', 9);
-    const aLines = doc.splitTextToSize(clean(a ? a.label : o.aspect), aspW - 4);
+    const aLines = doc.splitTextToSize(clean(aspectTitle(o.aspect)), aspW - 4);
     const nLines = o.note ? doc.splitTextToSize(clean(o.note), noteW - 4) : [''];
     const lines = Math.max(aLines.length, nLines.length);
     const rh = Math.max(6.2, lines * 4 + 2.4);

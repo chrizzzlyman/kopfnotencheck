@@ -1,6 +1,6 @@
 # Kopfnoten-Beobachter
 
-Eine kleine Web-App für Lehrkräfte: Beobachtungen zu **Mitarbeit** und **Verhalten** im Unterricht mit einem Tipp festhalten und später als PDF dokumentieren. Die 13 Schwerpunkte stammen aus den Bewertungsmatrizen *Mitarbeit* und *Verhalten* (Stand 05.08.2025).
+Eine kleine Web-App für Lehrkräfte: Beobachtungen zu **Mitarbeit** und **Verhalten** im Unterricht mit einem Tipp festhalten und später als PDF dokumentieren. Die 13 Schwerpunkte stammen aus den Bewertungsmatrizen *Mitarbeit* und *Verhalten* (Stand 05.08.2025). Zusätzlich gibt es einen Zähler für **vergessene Hausaufgaben**.
 
 Die App läuft komplett im Browser, lässt sich auf iPad, iPhone und Android als App installieren und funktioniert danach auch ohne Internet. **Alle Daten bleiben auf dem Gerät.** Es gibt keinen Server, kein Konto und kein Tracking.
 
@@ -9,10 +9,11 @@ Die App läuft komplett im Browser, lässt sich auf iPad, iPhone und Android als
 1. **Klasse anlegen:** Name, Namen der Kinder (eine Zeile pro Kind, auch aus einer Tabelle einfügbar) und ein erster Beobachtungszeitraum (z. B. Halbjahr).
 2. **Im Unterricht (Fokus-Modus):** Oben wählst du den Schwerpunkt, zum Beispiel *Beteiligung*. Unter dem Schwerpunkt steht, was ein **+** und was ein **−** bedeutet. Bei jedem Kind tippst du dann einfach auf **+** oder **−**. Jeder Tipp zeichnet einen Strich in die Strichliste über dem Button. So siehst du auf einen Blick, wen du noch nicht beobachtet hast.
 3. **Vertippt?** Direkt nach dem Tipp erscheint unten „Rückgängig“.
-4. **Sonderfälle:** Tipp auf den Namen öffnet alle 13 Schwerpunkte des Kindes mit + und −, den Verlauf aller Beobachtungen und die Möglichkeit, Notizen anzufügen oder Einträge zu löschen.
-5. **Auswertung:** Tabelle aller Kinder und Schwerpunkte mit Zählern und einem kleinen Tendenz-Balken. Mit „Wenigste zuerst“ findest du die Kinder, die du länger nicht beobachtet hast. Die App schlägt **keine Note** vor. Die Bewertung bleibt deine Entscheidung nach der Bewertungsmatrix.
-6. **PDF:** Klassenübersicht (Querformat), Bericht für ein Kind (z. B. für Elterngespräche) oder Berichte für alle Kinder in einer Datei.
-7. **Mehrere Klassen und Zeiträume:** Beliebig viele Klassen auf einem Gerät. Pro Klasse beliebig viele Beobachtungszeiträume. Neue Beobachtungen gehören immer zum gewählten Zeitraum, der oben als Pille angezeigt wird. Liegt der heutige Tag außerhalb des gewählten Zeitraums, färbt sich die Pille gelb.
+4. **Hausaufgaben:** Der dritte Tab *Hausaufgaben* hat bei jedem Kind nur einen Button **Vergessen**. Jeder Tipp zählt eine vergessene Hausaufgabe (mit Strichliste und „Rückgängig“). Der Zähler steht in der Auswertung und im PDF in einer eigenen Spalte und fließt **nicht** in „Gesamt“ ein, damit die Zählung der Matrix-Schwerpunkte sauber bleibt.
+5. **Sonderfälle:** Tipp auf den Namen öffnet alle 13 Schwerpunkte des Kindes mit + und − sowie den Hausaufgaben-Zähler, den Verlauf aller Beobachtungen und die Möglichkeit, Notizen anzufügen oder Einträge zu löschen.
+6. **Auswertung:** Tabelle aller Kinder und Schwerpunkte mit Zählern und einem kleinen Tendenz-Balken. Mit „Wenigste zuerst“ findest du die Kinder, die du länger nicht beobachtet hast. Die App schlägt **keine Note** vor. Die Bewertung bleibt deine Entscheidung nach der Bewertungsmatrix.
+7. **PDF:** Klassenübersicht (Querformat), Bericht für ein Kind (z. B. für Elterngespräche) oder Berichte für alle Kinder in einer Datei.
+8. **Mehrere Klassen und Zeiträume:** Beliebig viele Klassen auf einem Gerät. Pro Klasse beliebig viele Beobachtungszeiträume. Neue Beobachtungen gehören immer zum gewählten Zeitraum, der oben als Pille angezeigt wird. Liegt der heutige Tag außerhalb des gewählten Zeitraums, färbt sich die Pille gelb.
 
 ## Auf GitHub veröffentlichen (GitHub Pages)
 
@@ -54,7 +55,7 @@ index.html            Einstieg
 manifest.webmanifest  Installation als App
 sw.js                 Offline-Betrieb (Service Worker)
 css/style.css         Gestaltung (hell und dunkel)
-js/aspects.js         Die 13 Schwerpunkte mit Hinweisen zu + und −
+js/aspects.js         Die 13 Schwerpunkte mit Hinweisen zu + und − und der Hausaufgaben-Zähler
 js/db.js              Lokaler Speicher (IndexedDB)
 js/state.js           Zustand und alle Änderungen
 js/pdf.js             PDF-Erzeugung
