@@ -1,10 +1,12 @@
 // Unterrichtsansicht: Fokus-Modus. Oben der Schwerpunkt, bei jedem Kind ein + und ein −.
-// Im Bereich "Hausaufgaben" gibt es nur einen Button pro Kind (vergessen), ein Tipp zählt einmal.
+// Im Bereich "Hausaufgaben" hat jedes Kind zwei Buttons: ✓ nachgeholt (hakt die älteste offene ab) und Vergessen.
+// Die Strichlisten zeigen links nachgeholte (grün) und rechts offene (rot) Hausaufgaben.
 
 import { h, clear } from '../util.js';
 import { CATEGORIES, ASPECT_BY_KEY, aspectsOf } from '../aspects.js';
 import {
   S, getCount, getPeriod, getStudent, setFocus, addObservation, removeObservation, periodRangeText, isOutsidePeriod,
+  homeworkStats, openHomeworkCount, completeOldestOpen, setHomeworkDone,
 } from '../state.js';
 import { icon, tally, toast, openSheet } from '../ui.js';
 import { openChildSheet } from './child.js';
@@ -13,7 +15,7 @@ import { openExportSheet } from './exporter.js';
 
 export function renderLive(app) {
   const cls = S.cls;
-  const cards = new Map(); // studentId -> { el, plus, minus, sr, btnPlus, btnMinus, minusText, name }
+  const cards = new Map(); // studentId -> { el, plus, minus, sr, btnPlus, btnMinus, plusText, minusText, name }
 
   // ------------------------------------------------------------ Kopf
   const pill = h('button', { class: 'period-pill', type: 'button', onclick: () => openPeriodPicker({ onChange: refreshAll }) });
@@ -42,8 +44,9 @@ export function renderLive(app) {
           type: 'button',
           'aria-pressed': String(c.key === focus.cat),
           onclick: () => chooseFocus(S.ui.lastFocus[c.key]),
-        }, c.label)),
+        }, c.label, c.extra ? h('span', { class: 'tab-badge' }) : null)),
     );
+    refreshBadge();
     const sl = chips.scrollLeft;
     const list = aspectsOf(focus.cat);
     chips.hidden = list.length < 2; // ein einziger Schwerpunkt braucht keine Auswahl
@@ -59,11 +62,20 @@ export function renderLive(app) {
     chips.scrollLeft = sl;
     const sel = chips.querySelector('[aria-pressed="true"]');
     if (sel && chips.scrollWidth > chips.clientWidth) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    hintPlus.hidden = !!focus.single;
-    hintPlus.replaceChildren(h('span', { class: 'sgn' }, '+'), h('span', {}, focus.pos || ''));
+    hintPlus.replaceChildren(h('span', { class: 'sgn' }, focus.single ? '✓' : '+'), h('span', {}, focus.pos || ''));
     hintMinus.replaceChildren(h('span', { class: 'sgn' }, '−'), h('span', {}, focus.neg));
-    hints.classList.toggle('single', !!focus.single);
     grid.classList.toggle('single', !!focus.single);
+  }
+
+  /** Zahl der offenen Hausaufgaben (alle Zeiträume) am Tab, damit man sie auch in den anderen Bereichen sieht. */
+  function refreshBadge() {
+    const badge = tabs.querySelector('.tab-badge');
+    if (!badge) return;
+    const n = openHomeworkCount();
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.hidden = n === 0;
+    const tab = badge.closest('.tab');
+    tab.setAttribute('aria-label', n ? `Hausaufgaben, ${n} offen` : 'Hausaufgaben');
   }
 
   function chooseFocus(key) {
@@ -83,7 +95,8 @@ export function renderLive(app) {
       const plus = h('span', { class: 'tally-slot plus' });
       const minus = h('span', { class: 'tally-slot minus' });
       const sr = h('span', { class: 'sr-only' });
-      const btnPlus = h('button', { class: 'act plus', type: 'button', 'data-v': '1' }, h('span', { 'aria-hidden': 'true' }, '+'));
+      const plusText = h('span', { 'aria-hidden': 'true' }, '+');
+      const btnPlus = h('button', { class: 'act plus', type: 'button', 'data-v': '1' }, plusText);
       const minusText = h('span', { 'aria-hidden': 'true' }, '−');
       const btnMinus = h('button', { class: 'act minus', type: 'button', 'data-v': '-1' }, minusText);
       const name = h('button', { class: 'kid-name', type: 'button', 'data-open': '1' }, s.name);
@@ -92,7 +105,7 @@ export function renderLive(app) {
         h('div', { class: 'kid-tallies' }, plus, minus, sr),
         h('div', { class: 'kid-actions' }, btnPlus, btnMinus),
       );
-      cards.set(s.id, { el, plus, minus, sr, btnPlus, btnMinus, minusText, name });
+      cards.set(s.id, { el, plus, minus, sr, btnPlus, btnMinus, plusText, minusText, name });
       grid.append(el);
     }
   }
@@ -102,18 +115,28 @@ export function renderLive(app) {
     const s = getStudent(studentId);
     if (!c || !s) return;
     const focus = ASPECT_BY_KEY[S.ui.focus];
-    const [p, m] = S.ui.periodId ? getCount(studentId, focus.key, S.ui.periodId) : [0, 0];
-    c.plus.replaceChildren(tally(p, 'plus', { fresh: fresh > 0 }));
-    c.minus.replaceChildren(tally(m, 'minus', { fresh: fresh < 0 }));
     if (focus.single) {
-      c.sr.textContent = `${focus.full}: ${m}`;
+      // Hausaufgaben: links nachgeholt (grün), rechts noch offen (rot)
+      const { open, done } = S.ui.periodId ? homeworkStats(studentId, S.ui.periodId) : { open: 0, done: 0 };
+      c.plus.replaceChildren(tally(done, 'plus', { fresh: fresh > 0 }));
+      c.minus.replaceChildren(tally(open, 'minus', { fresh: fresh < 0 }));
+      c.sr.textContent = `${focus.full}: ${open} offen, ${done} nachgeholt`;
+      c.btnPlus.setAttribute('aria-label', `${s.name}: Hausaufgabe nachgeholt`);
       c.btnMinus.setAttribute('aria-label', `${s.name}: ${focus.full}`);
+      c.btnPlus.disabled = open === 0;
+      c.plusText.textContent = '✓';
+      c.minusText.textContent = 'Vergessen';
     } else {
+      const [p, m] = S.ui.periodId ? getCount(studentId, focus.key, S.ui.periodId) : [0, 0];
+      c.plus.replaceChildren(tally(p, 'plus', { fresh: fresh > 0 }));
+      c.minus.replaceChildren(tally(m, 'minus', { fresh: fresh < 0 }));
       c.sr.textContent = `${focus.label}: ${p} positiv, ${m} negativ`;
       c.btnPlus.setAttribute('aria-label', `${s.name}: ${focus.label} positiv`);
       c.btnMinus.setAttribute('aria-label', `${s.name}: ${focus.label} negativ`);
+      c.btnPlus.disabled = false;
+      c.plusText.textContent = '+';
+      c.minusText.textContent = '−';
     }
-    c.minusText.textContent = focus.single ? 'Vergessen' : '−';
     c.name.setAttribute('aria-label', `${s.name}: alle Schwerpunkte öffnen`);
   }
 
@@ -157,9 +180,11 @@ export function renderLive(app) {
     }
     res.done.catch((e) => {
       updateCard(studentId);
+      refreshBadge();
       toast(`Nicht gespeichert: ${e.message}`, { kind: 'error', duration: 8000 });
     });
     updateCard(studentId, v);
+    refreshBadge();
     const c = cards.get(studentId);
     if (c) {
       const cls = v > 0 ? 'flash-plus' : 'flash-minus';
@@ -178,9 +203,49 @@ export function renderLive(app) {
       onAction: () => {
         const saved = removeObservation(res.obs.id); // Zustand ändert sich sofort, Speichern läuft nach
         updateCard(studentId);
+        refreshBadge();
         toast('Rückgängig gemacht.', { duration: 1800 });
         saved.catch((e) => {
           updateCard(studentId);
+          refreshBadge();
+          toast(`Fehler: ${e.message}`, { kind: 'error' });
+        });
+      },
+    });
+  }
+
+  /** Hakt die älteste offene Hausaufgabe des Kindes ab. */
+  function complete(studentId) {
+    const s = getStudent(studentId);
+    if (!s || !S.ui.periodId) return;
+    const res = completeOldestOpen(studentId, S.ui.periodId);
+    if (!res) return;
+    res.done.catch((e) => {
+      updateCard(studentId);
+      refreshBadge();
+      toast(`Nicht gespeichert: ${e.message}`, { kind: 'error', duration: 8000 });
+    });
+    updateCard(studentId, 1);
+    refreshBadge();
+    const c = cards.get(studentId);
+    if (c) {
+      c.el.classList.remove('flash-plus', 'flash-minus');
+      void c.el.offsetWidth;
+      c.el.classList.add('flash-plus');
+      c.btnPlus.classList.add('hit');
+      setTimeout(() => c.btnPlus.classList.remove('hit'), 160);
+    }
+    if (navigator.vibrate) navigator.vibrate(10);
+    toast(h('span', {}, h('strong', {}, s.name), ': Hausaufgabe nachgeholt'), {
+      action: 'Rückgängig',
+      onAction: () => {
+        const saved = setHomeworkDone(res.obs.id, false);
+        updateCard(studentId);
+        refreshBadge();
+        toast('Rückgängig gemacht.', { duration: 1800 });
+        saved.catch((e) => {
+          updateCard(studentId);
+          refreshBadge();
           toast(`Fehler: ${e.message}`, { kind: 'error' });
         });
       },
@@ -193,11 +258,13 @@ export function renderLive(app) {
     const id = card.dataset.id;
     const act = e.target.closest('button.act');
     if (act) {
-      record(id, Number(act.dataset.v));
+      const v = Number(act.dataset.v);
+      if (v > 0 && ASPECT_BY_KEY[S.ui.focus].single) complete(id);
+      else record(id, v);
       return;
     }
     if (e.target.closest('button.kid-name')) {
-      openChildSheet(id, { onChange: () => updateCard(id) });
+      openChildSheet(id, { onChange: () => { updateCard(id); refreshBadge(); } });
     }
   });
 

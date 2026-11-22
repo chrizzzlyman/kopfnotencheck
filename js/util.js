@@ -70,6 +70,35 @@ export function deShortDateTime(ts) {
   return `${WEEKDAYS[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}., ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** "Mo, 22.11.2026, 16:35 Uhr" (Wochentag, volles Datum und Uhrzeit) */
+export function deLongDateTime(ts) {
+  const d = new Date(ts);
+  return `${WEEKDAYS[d.getDay()]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`;
+}
+
+/** "Mo, 22.11.2026" */
+export function deWeekdayDate(ts) {
+  const d = new Date(ts);
+  return `${WEEKDAYS[d.getDay()]}, ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+
+/** Kalendertage zwischen zwei Zeitpunkten (nach lokalem Datum, nicht nach 24-Stunden-Blöcken). */
+export function dayDiff(ts, now = Date.now()) {
+  const a = new Date(ts);
+  const b = new Date(now);
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((db - da) / 86400000);
+}
+
+/** "heute", "gestern", "vor 6 Tagen" */
+export function ageText(ts, now = Date.now()) {
+  const n = dayDiff(ts, now);
+  if (n <= 0) return 'heute';
+  if (n === 1) return 'gestern';
+  return `vor ${n} Tagen`;
+}
+
 export function todayIso() {
   return isoDate(new Date());
 }

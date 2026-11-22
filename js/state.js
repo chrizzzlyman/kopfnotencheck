@@ -2,7 +2,7 @@
 // Jede Änderung wird sofort in IndexedDB gespeichert.
 
 import * as db from './db.js';
-import { MATRIX_ASPECTS, DEFAULT_FOCUS, ASPECT_BY_KEY } from './aspects.js';
+import { MATRIX_ASPECTS, DEFAULT_FOCUS, ASPECT_BY_KEY, EXTRA_ASPECT } from './aspects.js';
 import { uid, todayIso, collator } from './util.js';
 
 export const ALL = 'all'; // Pseudo-Zeitraum "Alle Zeiträume" (nur für Ansicht und Export)
@@ -17,6 +17,13 @@ export const S = {
 };
 
 const key = (sid, aspect, pid) => `${sid}|${aspect}|${pid}`;
+
+/** Schlüssel des Hausaufgaben-Zählers. */
+export const HW = EXTRA_ASPECT.key;
+
+/** Meldet Änderungen an Hausaufgaben (für die Zahl am App-Symbol). */
+export const events = new EventTarget();
+const touchHomework = () => events.dispatchEvent(new Event('homework'));
 
 function bump(o, delta) {
   const k = key(o.studentId, o.aspect, o.periodId);
@@ -79,6 +86,7 @@ export async function createClass({ name, names, period }) {
 export async function removeClass(id) {
   await db.deleteClass(id);
   if (S.cls && S.cls.id === id) unloadClass();
+  touchHomework();
 }
 
 // ---------------------------------------------------------------- Klasse laden
@@ -186,10 +194,12 @@ export function addObservation({ studentId, aspect, v, periodId, note }) {
   if (note) o.note = note;
   S.obs.push(o);
   bump(o, 1);
+  if (aspect === HW) touchHomework();
   const done = db.put('observations', o).catch((e) => {
     // Speichern fehlgeschlagen: Änderung zurücknehmen, damit nichts Falsches angezeigt wird.
     S.obs = S.obs.filter((x) => x.id !== o.id);
     bump(o, -1);
+    if (aspect === HW) touchHomework();
     throw e;
   });
   return { obs: o, done };
@@ -200,9 +210,11 @@ export function removeObservation(id) {
   if (!o) return Promise.resolve();
   S.obs = S.obs.filter((x) => x.id !== id);
   bump(o, -1);
+  if (o.aspect === HW) touchHomework();
   return db.del('observations', id).catch((e) => {
     S.obs.push(o);
     bump(o, 1);
+    if (o.aspect === HW) touchHomework();
     throw e;
   });
 }
@@ -212,9 +224,11 @@ export function restoreObservation(o) {
   if (S.obs.some((x) => x.id === o.id)) return Promise.resolve();
   S.obs.push(o);
   bump(o, 1);
+  if (o.aspect === HW) touchHomework();
   return db.put('observations', o).catch((e) => {
     S.obs = S.obs.filter((x) => x.id !== o.id);
     bump(o, -1);
+    if (o.aspect === HW) touchHomework();
     throw e;
   });
 }
@@ -226,6 +240,82 @@ export function setObservationNote(id, note) {
   if (text) o.note = text;
   else delete o.note;
   return db.put('observations', o);
+}
+
+// ---------------------------------------------------------------- Hausaufgaben (offen / nachgeholt)
+
+const isHw = (o) => o.aspect === HW;
+
+/** Einträge "Hausaufgabe vergessen" eines Kindes (Standard: alle Zeiträume), unsortiert. */
+export function homeworkEntries(studentId, periodId = ALL) {
+  return S.obs.filter((o) => isHw(o) && o.studentId === studentId && (periodId === ALL || o.periodId === periodId));
+}
+
+/** { open, done } für ein Kind. periodId kann ALL sein. */
+export function homeworkStats(studentId, periodId = ALL) {
+  let open = 0;
+  let done = 0;
+  for (const o of homeworkEntries(studentId, periodId)) {
+    if (o.doneTs) done++;
+    else open++;
+  }
+  return { open, done };
+}
+
+/** Anzahl offener Hausaufgaben in der geöffneten Klasse (alle Zeiträume). */
+export function openHomeworkCount() {
+  return S.obs.reduce((n, o) => n + (isHw(o) && !o.doneTs ? 1 : 0), 0);
+}
+
+/**
+ * Markiert einen Eintrag als nachgeholt (done = true) oder wieder offen (done = false).
+ * Der Zustand ändert sich sofort; das Ergebnis meldet das Speichern. Funktioniert auch,
+ * wenn der Eintrag nicht zur geöffneten Klasse gehört (Startseite).
+ */
+export function setHomeworkDone(id, done = true) {
+  const o = S.obs.find((x) => x.id === id);
+  if (o) {
+    const prev = o.doneTs;
+    if (done) o.doneTs = Date.now();
+    else delete o.doneTs;
+    touchHomework();
+    return db.put('observations', o).catch((e) => {
+      if (prev) o.doneTs = prev;
+      else delete o.doneTs;
+      touchHomework();
+      throw e;
+    });
+  }
+  return (async () => {
+    const rec = await db.get('observations', id);
+    if (!rec || rec.aspect !== HW) return;
+    if (done) rec.doneTs = Date.now();
+    else delete rec.doneTs;
+    await db.put('observations', rec);
+    touchHomework();
+  })();
+}
+
+/** Hakt die älteste offene Hausaufgabe eines Kindes im Zeitraum ab. Gibt { obs, done } zurück oder null. */
+export function completeOldestOpen(studentId, periodId) {
+  const open = homeworkEntries(studentId, periodId).filter((o) => !o.doneTs).sort((a, b) => a.ts - b.ts);
+  if (!open.length) return null;
+  return { obs: open[0], done: setHomeworkDone(open[0].id, true) };
+}
+
+/** Alle offenen Hausaufgaben aller Klassen, älteste zuerst (für die Startseite und die Zahl am App-Symbol). */
+export async function listOpenHomework() {
+  const [obs, students, classes] = await Promise.all([db.getAll('observations'), db.getAll('students'), db.getAll('classes')]);
+  const stu = new Map(students.map((s) => [s.id, s]));
+  const cls = new Map(classes.map((c) => [c.id, c]));
+  const rows = [];
+  for (const o of obs) {
+    if (o.aspect !== HW || o.doneTs) continue;
+    const student = stu.get(o.studentId);
+    const klass = cls.get(o.classId);
+    if (student && klass) rows.push({ obs: o, student, cls: klass });
+  }
+  return rows.sort((a, b) => a.obs.ts - b.obs.ts);
 }
 
 // ---------------------------------------------------------------- Kinder
@@ -256,6 +346,7 @@ export async function removeStudent(id) {
   S.students = S.students.filter((s) => s.id !== id);
   S.obs = S.obs.filter((o) => o.studentId !== id);
   rebuildCounts();
+  touchHomework();
 }
 
 export async function sortStudentsAZ() {
@@ -282,6 +373,7 @@ export async function removePeriod(id) {
   S.periods = S.periods.filter((p) => p.id !== id);
   S.obs = S.obs.filter((o) => o.periodId !== id);
   rebuildCounts();
+  touchHomework();
   if (S.ui.periodId === id) await setPeriod(pickDefaultPeriod(S.periods)?.id ?? null);
 }
 
@@ -330,9 +422,13 @@ export function validateBackup(raw) {
     classes: arr(raw.classes).filter((c) => c && c.id && typeof c.name === 'string'),
     students: arr(raw.students).filter((s) => s && s.id && s.classId && typeof s.name === 'string'),
     periods: arr(raw.periods).filter((p) => p && p.id && p.classId && typeof p.name === 'string'),
-    observations: arr(raw.observations).filter(
-      (o) => o && o.id && o.classId && o.studentId && o.periodId && ASPECT_BY_KEY[o.aspect] && (o.v === 1 || o.v === -1) && Number.isFinite(o.ts),
-    ),
+    observations: arr(raw.observations)
+      .filter((o) => o && o.id && o.classId && o.studentId && o.periodId && ASPECT_BY_KEY[o.aspect] && (o.v === 1 || o.v === -1) && Number.isFinite(o.ts))
+      .map((o) => {
+        if (!('doneTs' in o) || Number.isFinite(o.doneTs)) return o;
+        const { doneTs, ...rest } = o; // ungültiges Nachgeholt-Datum verwerfen, Eintrag bleibt offen
+        return rest;
+      }),
   };
   if (!data.classes.length) throw new Error('Die Sicherung enthält keine Klassen.');
   return data;
@@ -341,4 +437,5 @@ export function validateBackup(raw) {
 export async function restoreBackup(data) {
   await db.restoreAll(data);
   unloadClass();
+  touchHomework();
 }

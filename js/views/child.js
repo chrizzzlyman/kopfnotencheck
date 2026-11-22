@@ -1,10 +1,10 @@
 // Detailansicht eines Kindes: alle Schwerpunkte mit + und −, Zähler und Verlauf der Beobachtungen.
 
-import { h, deShortDateTime, plural } from '../util.js';
+import { h, deShortDateTime, deLongDateTime, ageText, plural } from '../util.js';
 import { CATEGORIES, ASPECT_BY_KEY, aspectsOf, aspectTitle } from '../aspects.js';
 import {
-  S, ALL, getStudent, getCount, sumCounts, observationsOf, addObservation, removeObservation,
-  restoreObservation, setObservationNote, getPeriod,
+  S, ALL, HW, getStudent, getCount, sumCounts, observationsOf, addObservation, removeObservation,
+  restoreObservation, setObservationNote, getPeriod, homeworkEntries, setHomeworkDone,
 } from '../state.js';
 import { openSheet, icon, toast, errorText } from '../ui.js';
 
@@ -83,18 +83,6 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
   function aspectRow(a) {
     const [p, m] = getCount(studentId, a.key, viewPeriod);
     const canAdd = viewPeriod !== ALL;
-    if (a.single) {
-      // Zusatzzähler (Hausaufgaben): nur eine Zählung, kein + und −
-      return h('div', { class: 'aspect-row' },
-        h('div', { class: 'aspect-main' },
-          h('span', { class: 'aspect-name' }, a.full),
-          m ? h('span', { class: 'aspect-counts', 'aria-label': `${m} Mal` }, h('span', { class: 'cnt minus' }, `${m}×`)) : null),
-        canAdd
-          ? h('div', { class: 'mini-actions' },
-              h('button', { class: 'mini minus wide', type: 'button', 'aria-label': `${a.full}: einmal zählen`, onclick: () => record(a.key, -1) }, 'Vergessen'))
-          : null,
-      );
-    }
     return h('div', { class: 'aspect-row' },
       h('div', { class: 'aspect-main' }, h('span', { class: 'aspect-name' }, a.label), counts(p, m)),
       canAdd
@@ -105,27 +93,89 @@ export function openChildSheet(studentId, { onChange = () => {}, periodId = null
     );
   }
 
+  /** Hausaufgaben: jeder Eintrag mit genauem Datum, Status und Knopf "Nachgeholt" / "Wieder offen". */
+  function homeworkSection(cat) {
+    const a = aspectsOf(cat.key)[0];
+    const entries = homeworkEntries(studentId, viewPeriod);
+    const open = entries.filter((o) => !o.doneTs).sort((x, y) => x.ts - y.ts);
+    const done = entries.filter((o) => o.doneTs).sort((x, y) => y.ts - x.ts);
+    const canAdd = viewPeriod !== ALL;
+    return h('section', { class: `aspect-group ${cat.key}` },
+      h('div', { class: 'group-head' },
+        h('h3', {}, cat.label),
+        h('span', { class: 'aspect-counts group-total', 'aria-label': `${open.length} offen, ${done.length} nachgeholt` },
+          open.length ? h('span', { class: 'cnt minus' }, `${open.length} offen`) : null,
+          done.length ? h('span', { class: 'cnt plus' }, `${done.length} nachgeholt`) : null)),
+      h('div', { class: 'aspect-row' },
+        h('div', { class: 'aspect-main' }, h('span', { class: 'aspect-name' }, a.full)),
+        canAdd
+          ? h('div', { class: 'mini-actions' },
+              h('button', { class: 'mini minus wide', type: 'button', 'aria-label': `${a.full}: einmal zählen`, onclick: () => record(a.key, -1) }, 'Vergessen'))
+          : null),
+      entries.length
+        ? h('ul', { class: 'history-list hw-entries' }, [...open, ...done].map(hwItem))
+        : h('p', { class: 'hint hw-none' }, 'Noch keine vergessenen Hausaufgaben in diesem Zeitraum.'));
+  }
+
+  function hwItem(o) {
+    const isDone = !!o.doneTs;
+    const per = viewPeriod === ALL && getPeriod(o.periodId) ? `, ${getPeriod(o.periodId).name}` : '';
+    return h('li', { class: `history-item hw-item ${isDone ? 'done' : 'open'}` },
+      h('span', { class: `sgn-badge ${isDone ? 'plus' : 'minus'}`, 'aria-label': isDone ? 'nachgeholt' : 'offen' }, isDone ? '✓' : '−'),
+      h('div', { class: 'history-main' },
+        h('span', { class: 'history-title' }, `Vergessen am ${deLongDateTime(o.ts)}`),
+        h('span', { class: `hw-status ${isDone ? 'done' : 'open'}` },
+          isDone ? `Nachgeholt am ${deLongDateTime(o.doneTs)}${per}` : `Noch offen, ${ageText(o.ts)}${per}`),
+        o.note ? h('span', { class: 'history-note' }, o.note) : null,
+        h('button', { class: 'btn small hw-toggle', type: 'button', onclick: () => toggleDone(o) }, isDone ? 'Wieder offen' : 'Nachgeholt')),
+      h('div', { class: 'history-actions' },
+        h('button', { class: 'icon-btn small', type: 'button', 'aria-label': o.note ? 'Notiz bearbeiten' : 'Notiz hinzufügen', onclick: () => editNote(o) }, icon('note', 18)),
+        h('button', { class: 'icon-btn small', type: 'button', 'aria-label': 'Beobachtung löschen', onclick: () => deleteObs(o) }, icon('trash', 18))),
+    );
+  }
+
+  function toggleDone(o) {
+    const wasDone = !!o.doneTs;
+    const saved = setHomeworkDone(o.id, !wasDone);
+    render();
+    onChange();
+    saved.catch(failed);
+    toast(wasDone ? 'Wieder offen.' : 'Als nachgeholt markiert.', {
+      action: 'Rückgängig',
+      onAction: () => {
+        const back = setHomeworkDone(o.id, wasDone);
+        render();
+        onChange();
+        back.catch(failed);
+      },
+    });
+  }
+
   function render() {
     const top = sh.body.scrollTop;
     content.replaceChildren();
     if (viewPeriod === ALL) content.append(h('p', { class: 'hint' }, 'In der Ansicht „Alle Zeiträume“ kannst du nichts hinzufügen. Wähle dafür einen einzelnen Zeitraum.'));
 
     for (const cat of CATEGORIES) {
+      if (cat.extra) {
+        content.append(homeworkSection(cat));
+        continue;
+      }
       const list = aspectsOf(cat.key);
       const [p, m] = sumCounts(studentId, viewPeriod, list);
       content.append(
         h('section', { class: `aspect-group ${cat.key}` },
           h('div', { class: 'group-head' },
             h('h3', {}, cat.label),
-            cat.extra ? null : counts(p, m, 'group-total')),
+            counts(p, m, 'group-total')),
           list.map(aspectRow)),
       );
     }
 
     // Verlauf
-    const all = observationsOf(studentId, viewPeriod);
+    const all = observationsOf(studentId, viewPeriod).filter((o) => o.aspect !== HW); // Hausaufgaben stehen oben im eigenen Abschnitt
     const shown = all.slice(0, historyLimit);
-    const hist = h('section', { class: 'history' }, h('h3', {}, 'Verlauf'));
+    const hist = h('section', { class: 'history' }, h('h3', {}, 'Verlauf Mitarbeit und Verhalten'));
     if (!all.length) hist.append(h('p', { class: 'hint' }, 'Noch keine Beobachtungen in diesem Zeitraum.'));
     const ul = h('ul', { class: 'history-list' });
     for (const o of shown) {

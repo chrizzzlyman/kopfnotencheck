@@ -3,7 +3,8 @@
 // label  = kurzer Name für Buttons und Tabellen
 // full   = Bezeichnung wie in der Bewertungsmatrix
 // pos/neg = kurze Alltagshinweise, was ein + bzw. − bedeutet (abgeleitet aus der Matrix)
-// extra  = Zusatzzähler außerhalb der Matrizen; single = nur ein Zähler (ein Tipp = eine Zählung, gespeichert als −1)
+// extra  = Zusatzzähler außerhalb der Matrizen; single = nur ein Zähler (ein Tipp = eine Zählung, gespeichert als −1).
+//          Jeder Eintrag ist "offen", bis er als nachgeholt markiert wird (Feld doneTs).
 
 export const CATEGORIES = [
   { key: 'mitarbeit', label: 'Mitarbeit' },
@@ -96,7 +97,8 @@ export const ASPECTS = [
   {
     key: 'hausaufgabe', cat: 'hausaufgabe', extra: true, single: true,
     label: 'Vergessen', full: 'Hausaufgabe vergessen',
-    neg: 'Jeder Tipp zählt eine vergessene Hausaufgabe',
+    pos: 'nachgeholt (älteste offene)',
+    neg: 'vergessen (bleibt offen)',
   },
 ];
 

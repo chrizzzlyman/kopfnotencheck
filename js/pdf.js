@@ -1,7 +1,7 @@
 // PDF-Erzeugung im Browser (jsPDF, lokal eingebunden). Es wird nichts hochgeladen.
 // Schrift: Liberation Sans (SIL OFL), damit auch Namen mit ş, ğ, ł, ć, č, ő oder kyrillischen Buchstaben stimmen.
 
-import { S, ALL, getCount, sumCounts, getPeriod, periodRangeText, observationsOf, getStudent } from './state.js';
+import { S, ALL, getCount, sumCounts, getPeriod, periodRangeText, observationsOf, getStudent, homeworkStats } from './state.js';
 import { MATRIX_ASPECTS, MATRIX_CATEGORIES, CATEGORIES, EXTRA_ASPECT, aspectsOf, aspectTitle } from './aspects.js';
 import { deDate, deDateTime, safeFilename, todayIso } from './util.js';
 
@@ -225,8 +225,22 @@ function drawOverview(doc, ctx) {
     cellBox(doc, x, y, extraW, rowH, fill);
     const forgotten = getCount(s.id, EXTRA_ASPECT.key, ctx.periodId)[1];
     if (forgotten > 0) {
+      const { open } = homeworkStats(s.id, ctx.periodId);
       setFont(doc, 'bold', 9.5, catColor(EXTRA_ASPECT.cat));
-      doc.text(String(forgotten), x + extraW / 2, y + rowH / 2 + 1.2, { align: 'center' });
+      if (open > 0) {
+        // z. B. "3" und klein "2 offen" daneben
+        const label = String(forgotten);
+        const wNum = doc.getTextWidth(label);
+        setFont(doc, 'normal', 7.5, C.muted);
+        const wOpen = doc.getTextWidth(`${open} offen`);
+        const x0 = x + (extraW - (wNum + 1.6 + wOpen)) / 2;
+        setFont(doc, 'bold', 9.5, catColor(EXTRA_ASPECT.cat));
+        doc.text(label, x0, y + rowH / 2 + 1.2);
+        setFont(doc, 'normal', 7.5, C.muted);
+        doc.text(`${open} offen`, x0 + wNum + 1.6, y + rowH / 2 + 1.1);
+      } else {
+        doc.text(String(forgotten), x + extraW / 2, y + rowH / 2 + 1.2, { align: 'center' });
+      }
     }
     y += rowH;
   });
@@ -237,7 +251,7 @@ function drawOverview(doc, ctx) {
     y = m;
   }
   setFont(doc, 'normal', 8.5, C.muted);
-  doc.text(`Grün: positive Beobachtungen. Rot: negative Beobachtungen. Leere Felder: keine Beobachtung. Hausaufgaben: Anzahl vergessener Hausaufgaben, nicht in Gesamt enthalten. Insgesamt ${S.obs.filter((o) => ctx.periodId === ALL || o.periodId === ctx.periodId).length} Beobachtungen im gewählten Zeitraum.`, m, y);
+  doc.text(`Grün: positive Beobachtungen. Rot: negative Beobachtungen. Leere Felder: keine Beobachtung. Hausaufgaben: Anzahl vergessener Hausaufgaben, dahinter die noch offenen (nicht in Gesamt enthalten). Insgesamt ${S.obs.filter((o) => ctx.periodId === ALL || o.periodId === ctx.periodId).length} Beobachtungen im gewählten Zeitraum.`, m, y);
 }
 
 // ------------------------------------------------------------------ Bericht pro Kind (Hochformat)
@@ -271,7 +285,8 @@ function drawChild(doc, ctx, student, includeList, isFirst) {
       setFont(doc, 'bold', 10, count ? catColor(cat.key) : C.line);
       doc.text(String(count), m + nameW + numW / 2, y + 4.9, { align: 'center' });
       setFont(doc, 'normal', 8.5, C.muted);
-      doc.text(count ? 'Mal im Zeitraum (nicht in Summen)' : 'nicht vorgekommen', m + nameW + numW + 3, y + 4.8);
+      const hw = homeworkStats(student.id, ctx.periodId);
+      doc.text(count ? `Mal, davon ${hw.open} offen, ${hw.done} nachgeholt` : 'nicht vorgekommen', m + nameW + numW + 3, y + 4.8);
       y += 12;
       continue;
     }
@@ -365,7 +380,9 @@ function drawChild(doc, ctx, student, includeList, isFirst) {
     const when = deDateTime(o.ts);
     setFont(doc, 'normal', 9);
     const aLines = doc.splitTextToSize(clean(aspectTitle(o.aspect)), aspW - 4);
-    const nLines = o.note ? doc.splitTextToSize(clean(o.note), noteW - 4) : [''];
+    const status = o.aspect === EXTRA_ASPECT.key ? (o.doneTs ? `Nachgeholt am ${deDateTime(o.doneTs)}` : 'Noch offen') : '';
+    const noteText = [status, o.note].filter(Boolean).join(': ');
+    const nLines = noteText ? doc.splitTextToSize(clean(noteText), noteW - 4) : [''];
     const lines = Math.max(aLines.length, nLines.length);
     const rh = Math.max(6.2, lines * 4 + 2.4);
     if (y + rh > bottom) {

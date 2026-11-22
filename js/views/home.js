@@ -1,15 +1,17 @@
 // Startseite: Klassenliste, neue Klasse anlegen.
 
 import { h, clear, parseNames, suggestPeriod, plural } from '../util.js';
-import { listClasses, createClass, lastBackupAt } from '../state.js';
+import { listClasses, createClass, lastBackupAt, listOpenHomework } from '../state.js';
 import { requestPersistence } from '../db.js';
 import { icon, openSheet, field, errorText, tally } from '../ui.js';
 import { openBackupSheet, openPrivacySheet } from './backup.js';
+import { homeworkOverview } from './homework.js';
+import { openRemindersSheet } from './reminders.js';
 
 const BACKUP_REMINDER_DAYS = 14;
 
 export async function renderHome(app, isCurrent = () => true) {
-  const [classes, last] = await Promise.all([listClasses(), lastBackupAt()]);
+  const [classes, last, openHw] = await Promise.all([listClasses(), lastBackupAt(), listOpenHomework()]);
   if (!isCurrent()) return;
   const hasData = classes.some((c) => c.obsCount > 0);
   const stale = hasData && (!last || Date.now() - last > BACKUP_REMINDER_DAYS * 86400000);
@@ -20,6 +22,7 @@ export async function renderHome(app, isCurrent = () => true) {
   app.append(
     h('header', { class: 'topbar' },
       h('h1', { class: 'title app-title' }, 'Kopfnoten-Beobachter'),
+      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Erinnerungen', onclick: () => openRemindersSheet() }, icon('bell')),
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sichern und wiederherstellen', onclick: () => openBackupSheet({ onChanged: rerender }) }, icon('download')),
     ),
     h('main', { class: 'page' },
@@ -28,12 +31,14 @@ export async function renderHome(app, isCurrent = () => true) {
             h('p', {}, last ? 'Deine letzte Sicherung ist älter als zwei Wochen.' : 'Du hast noch keine Sicherung erstellt.'),
             h('button', { class: 'btn small', type: 'button', onclick: () => openBackupSheet({ onChanged: rerender }) }, 'Jetzt sichern'))
         : null,
+      homeworkOverview(openHw, { onChanged: rerender }),
       classes.length ? classList(classes) : emptyState(rerender),
       classes.length
         ? h('button', { class: 'btn primary big', type: 'button', onclick: () => openNewClassSheet() }, icon('plus', 20), 'Klasse anlegen')
         : null,
       h('footer', { class: 'home-foot' },
         h('button', { class: 'link', type: 'button', onclick: () => openBackupSheet({ onChanged: rerender }) }, 'Sichern und wiederherstellen'),
+        h('button', { class: 'link', type: 'button', onclick: () => openRemindersSheet() }, 'Erinnerungen'),
         h('button', { class: 'link', type: 'button', onclick: () => openPrivacySheet() }, 'Datenschutz'),
       ),
     ),

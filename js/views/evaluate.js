@@ -2,7 +2,7 @@
 
 import { h, clear, plural } from '../util.js';
 import { MATRIX_CATEGORIES, MATRIX_ASPECTS, EXTRA_ASPECT, CATEGORIES, aspectsOf } from '../aspects.js';
-import { S, ALL, getCount, sumCounts } from '../state.js';
+import { S, ALL, getCount, sumCounts, homeworkStats } from '../state.js';
 import { icon } from '../ui.js';
 import { openChildSheet } from './child.js';
 import { openExportSheet } from './exporter.js';
@@ -46,8 +46,12 @@ export function renderEvaluate(app) {
   /** Zusatzzähler (Hausaufgaben): nur eine Zahl, kein Balken. */
   function extraCell(studentId, a) {
     const [, m] = getCount(studentId, a.key, periodId);
+    const { open } = homeworkStats(studentId, periodId);
     const td = h('td', { class: `cell extra${m ? '' : ' zero'}` });
-    if (m) td.append(h('span', { class: 'nums', 'aria-label': `${m} Mal ${a.full}` }, num(m, 'm')));
+    if (m) {
+      td.append(h('span', { class: 'nums', 'aria-label': `${m} Mal ${a.full}${open ? `, davon ${open} noch offen` : ''}` }, num(m, 'm')));
+      if (open) td.append(h('span', { class: 'sub-open', 'aria-hidden': 'true' }, `${open} offen`));
+    }
     return td;
   }
 
@@ -83,7 +87,8 @@ export function renderEvaluate(app) {
     wrap.append(h('table', { class: 'eval' }, h('thead', {}, head1, head2), body));
 
     const observed = rows.filter((r) => r.tot[0] + r.tot[1] > 0).length;
-    summary.textContent = `${observed} von ${plural(rows.length, 'Kind', 'Kindern')} mit Beobachtungen.`;
+    const openTotal = S.students.reduce((n, st) => n + homeworkStats(st.id, periodId).open, 0);
+    summary.textContent = `${observed} von ${plural(rows.length, 'Kind', 'Kindern')} mit Beobachtungen.${openTotal ? ` ${plural(openTotal, 'Hausaufgabe', 'Hausaufgaben')} noch offen.` : ''}`;
   }
 
   clear(app);
@@ -100,7 +105,7 @@ export function renderEvaluate(app) {
       summary,
       wrap,
       h('p', { class: 'hint legend' },
-        h('span', { class: 'sgn plus' }, 'Grün'), ' zählt positive, ', h('span', { class: 'sgn minus' }, 'Rot'), ' negative Beobachtungen. Der Balken zeigt den Anteil der positiven. Die Spalte Hausaufgaben zählt vergessene Hausaufgaben und fließt nicht in „Gesamt“ ein. Die Zahlen dokumentieren Beobachtungen und ersetzen nicht die Bewertung nach den Bewertungsmatrizen.'),
+        h('span', { class: 'sgn plus' }, 'Grün'), ' zählt positive, ', h('span', { class: 'sgn minus' }, 'Rot'), ' negative Beobachtungen. Der Balken zeigt den Anteil der positiven. Die Spalte Hausaufgaben zählt vergessene Hausaufgaben, darunter steht, wie viele davon noch offen sind. Sie fließt nicht in „Gesamt“ ein. Die Zahlen dokumentieren Beobachtungen und ersetzen nicht die Bewertung nach den Bewertungsmatrizen.'),
     ),
   );
   renderControls();

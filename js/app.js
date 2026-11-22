@@ -3,6 +3,7 @@
 import { h, clear } from './util.js';
 import { S, loadClass, unloadClass } from './state.js';
 import { open as openDb } from './db.js';
+import { initReminders } from './reminders.js';
 import { closeAllOverlays, clearToast, toast } from './ui.js';
 import { renderHome } from './views/home.js';
 import { renderLive } from './views/live.js';
@@ -66,6 +67,7 @@ async function boot() {
   window.addEventListener('hashchange', route);
   await route();
   registerServiceWorker();
+  initReminders();
 }
 
 function registerServiceWorker() {

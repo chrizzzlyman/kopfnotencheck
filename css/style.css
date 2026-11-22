@@ -173,7 +173,7 @@ body > #app > .topbar { box-shadow: 0 1px 0 var(--line); position: sticky; top: 
 }
 .focus[data-cat="verhalten"] { --cat: var(--amber); --cat-tint: var(--amber-tint); }
 .focus[data-cat="hausaufgabe"] { --cat: var(--violet); --cat-tint: var(--violet-tint); }
-.focus-chips[hidden], .hint-box[hidden] { display: none; }
+.focus-chips[hidden], .hint-box[hidden], .tab-badge[hidden] { display: none; }
 
 .focus-tabs { display: flex; gap: 6px; }
 .tab {
@@ -184,6 +184,23 @@ body > #app > .topbar { box-shadow: 0 1px 0 var(--line); position: sticky; top: 
   background: var(--surface);
   font-weight: 700;
   color: var(--muted);
+}
+.tab { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--violet);
+  color: var(--on-accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
 }
 .tab.mitarbeit[aria-pressed="true"] { background: var(--blue-tint); border-color: var(--blue); color: var(--blue); }
 .tab.verhalten[aria-pressed="true"] { background: var(--amber-tint); border-color: var(--amber); color: var(--amber); }
@@ -239,7 +256,6 @@ body > #app > .topbar { box-shadow: 0 1px 0 var(--line); position: sticky; top: 
 .hint-box.plus .sgn { color: var(--plus); }
 .hint-box.minus { background: var(--minus-tint); }
 .hint-box.minus .sgn { color: var(--minus); }
-.hints.single { grid-template-columns: 1fr; }
 
 @media (min-width: 820px) {
   .focus { grid-template-columns: auto 1fr; align-items: center; column-gap: 14px; }
@@ -298,10 +314,12 @@ body > #app > .topbar { box-shadow: 0 1px 0 var(--line); position: sticky; top: 
 .tally line.new { stroke-dasharray: 26; animation: stroke-in 0.22s ease-out; }
 .tally-num { font-weight: 700; font-size: 1.05rem; line-height: 1; }
 .kid-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
-/* Bereich Hausaufgaben: ein Zähler, ein Button pro Kind */
-.kid-grid.single .tally-slot.plus, .kid-grid.single .act.plus { display: none; }
-.kid-grid.single .kid-tallies, .kid-grid.single .kid-actions { grid-template-columns: 1fr; }
-.kid-grid.single .act.minus { font-size: 1.1rem; }
+/* Bereich Hausaufgaben: links ✓ nachgeholt (schmal), rechts Vergessen */
+.kid-grid.single .kid-tallies, .kid-grid.single .kid-actions { grid-template-columns: 48px 1fr; }
+.kid-grid.single .act.plus { font-size: 1.5rem; }
+.kid-grid.single .act.minus { font-size: 1.05rem; }
+.act:disabled { opacity: 0.35; }
+.act:disabled:active { transform: none; background: var(--plus-tint); color: var(--plus); }
 .act {
   min-height: 48px;
   border: 0;
@@ -645,3 +663,56 @@ table.eval { border-collapse: separate; border-spacing: 0; min-width: 100%; font
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* ------------------------------------------------------------------ Hausaufgaben: Einträge, Startseite, Erinnerungen */
+
+.hw-entries { margin-top: 2px; }
+.hw-status { font-size: 0.95rem; font-weight: 700; }
+.hw-status.open { color: var(--minus); }
+.hw-status.done { color: var(--plus); }
+.hw-toggle { justify-self: start; margin-top: 6px; }
+.hw-none { padding: 8px 12px; margin: 0; }
+.hw-item.done .history-title { color: var(--muted); }
+
+.hw-overview { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 12px 12px 8px; display: grid; gap: 4px; border-top: 4px solid var(--violet); }
+.hw-head { display: flex; align-items: center; gap: 10px; }
+.hw-head h2 { font-size: 1.15rem; flex: 1; margin: 0; }
+.hw-count { min-width: 28px; height: 28px; padding: 0 8px; border-radius: 14px; background: var(--violet); color: var(--on-accent); font-weight: 700; display: inline-grid; place-items: center; }
+.hw-list { list-style: none; margin: 0; padding: 0; }
+.hw-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.hw-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hw-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.hw-name { font-weight: 700; font-size: 1.0625rem; overflow-wrap: anywhere; }
+.hw-class { color: var(--muted); font-size: 0.9375rem; text-decoration: underline; text-underline-offset: 3px; }
+.hw-meta { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: 0.9375rem; color: var(--muted); }
+.hw-age { color: var(--minus); font-weight: 700; }
+.hw-age.old { color: var(--amber); }
+.hw-done {
+  flex: none;
+  min-width: 84px;
+  min-height: 56px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--plus-tint);
+  color: var(--plus);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.hw-done:active { background: var(--plus); color: var(--on-accent); }
+.hw-more { justify-self: start; }
+
+.switch-row .check-row { align-items: flex-start; padding: 6px 0; }
+.switch-row .check-row input { margin-top: 2px; }
+.switch-row.disabled { opacity: 0.55; }
+.switch-text { display: grid; gap: 2px; }
+.rule { border: 0; border-top: 1px solid var(--line-soft); margin: 14px 0; }
+.sub-title { font-size: 1.05rem; }
+
+.eval .sub-open { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 1px; white-space: nowrap; }

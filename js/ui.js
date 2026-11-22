@@ -22,6 +22,7 @@ const ICONS = {
   note: ['M4 5h16v11H9l-5 4z'],
   undo: ['M9 14L4 9l5-5', 'M4 9h10a6 6 0 010 12h-3'],
   shield: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z'],
+  bell: ['M6 17v-6a6 6 0 0112 0v6l2 2H4z', 'M10 21h4'],
 };
 
 export function icon(name, size = 22) {
